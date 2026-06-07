@@ -150,7 +150,7 @@
                 scene.background = new THREE.Color(0x020617);
                 
                 const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-                camera.position.z = 300;
+                camera.position.z = 135;
 
                 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
                 renderer.setSize(width, height);
@@ -245,8 +245,8 @@
 
                 setLabelsData(labels);
 
-                globeGroup.rotation.y = -Math.PI / 4; 
-                globeGroup.rotation.x = Math.PI / 8;
+                globeGroup.rotation.y = -1.1; 
+                globeGroup.rotation.x = 0.5;
 
                 let isDragging = false;
                 let prevMouse = { x: 0, y: 0 };
@@ -262,9 +262,64 @@
                     }
                     prevMouse = { x: e.clientX, y: e.clientY };
                 };
+                
+                let touchX = 0;
+                let touchY = 0;
+                let initialPinchDist = null;
+
+                const getPinchDist = (e) => {
+                    if (e.touches.length < 2) return null;
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    return Math.sqrt(dx * dx + dy * dy);
+                };
+
+                const onTouchStart = (e) => {
+                    isDragging = true;
+                    if (e.touches.length === 1) {
+                        touchX = e.touches[0].clientX;
+                        touchY = e.touches[0].clientY;
+                        initialPinchDist = null;
+                    } else if (e.touches.length === 2) {
+                        initialPinchDist = getPinchDist(e);
+                    }
+                    lastInteractionTime = Date.now();
+                };
+                
+                const onTouchMove = (e) => {
+                    if (isDragging) {
+                        e.preventDefault(); 
+                        if (e.touches.length === 1 && !initialPinchDist) {
+                            // Arrastrar (Pan)
+                            const deltaX = e.touches[0].clientX - touchX;
+                            const deltaY = e.touches[0].clientY - touchY;
+                            globeGroup.rotation.y += deltaX * 0.005;
+                            globeGroup.rotation.x += deltaY * 0.005;
+                            touchX = e.touches[0].clientX;
+                            touchY = e.touches[0].clientY;
+                        } else if (e.touches.length === 2) {
+                            // Zoom (Pinch)
+                            const currentPinchDist = getPinchDist(e);
+                            if (initialPinchDist && currentPinchDist) {
+                                const pinchDelta = initialPinchDist - currentPinchDist;
+                                camera.position.z += pinchDelta * 0.5;
+                                camera.position.z = Math.max(105, Math.min(camera.position.z, 600)); // Límite de zoom drásticamente reducido a 105
+                                initialPinchDist = currentPinchDist;
+                            }
+                        }
+                        lastInteractionTime = Date.now();
+                    }
+                };
+                
+                const onTouchEnd = () => { 
+                    isDragging = false; 
+                    initialPinchDist = null;
+                    lastInteractionTime = Date.now(); 
+                };
+
                 const onWheel = (e) => {
                     camera.position.z += e.deltaY * 0.5;
-                    camera.position.z = Math.max(150, Math.min(camera.position.z, 600)); 
+                    camera.position.z = Math.max(105, Math.min(camera.position.z, 600)); 
                     lastInteractionTime = Date.now();
                 };
 
@@ -273,6 +328,10 @@
                 window.addEventListener('mouseup', onMouseUp);
                 window.addEventListener('mousemove', onMouseMove);
                 canvasDom.addEventListener('wheel', onWheel, { passive: true });
+                
+                canvasDom.addEventListener('touchstart', onTouchStart, { passive: false });
+                window.addEventListener('touchmove', onTouchMove, { passive: false });
+                window.addEventListener('touchend', onTouchEnd);
 
                 const tempV = new THREE.Vector3();
                 const animate = () => {
@@ -334,6 +393,11 @@
                     window.removeEventListener('mouseup', onMouseUp);
                     window.removeEventListener('mousemove', onMouseMove);
                     canvasDom.removeEventListener('wheel', onWheel);
+                    
+                    canvasDom.removeEventListener('touchstart', onTouchStart);
+                    window.removeEventListener('touchmove', onTouchMove);
+                    window.removeEventListener('touchend', onTouchEnd);
+                    
                     mountRef.current?.removeChild(renderer.domElement);
                 };
             }, [logs]);
@@ -356,7 +420,7 @@
                     <div ref={geoLabelsContainerRef} className={`absolute top-0 left-0 w-full h-full pointer-events-none transition-opacity duration-300 ${showGeoLabels ? 'opacity-100' : 'opacity-0'}`}>
                         {GEO_LABELS.map((lbl, idx) => (
                             <div key={idx} className="absolute top-0 left-0 transition-opacity duration-100 text-center pointer-events-none" style={{ willChange: 'transform' }}>
-                                <div className={lbl.type === 'country' ? 'text-[11px] font-black uppercase tracking-[0.2em] text-slate-300/40' : 'text-[9px] font-semibold text-slate-400/50'}>
+                                <div className={lbl.type === 'country' ? 'text-[11px] font-black uppercase tracking-[0.2em] text-white/90 drop-shadow-[0_1px_3px_rgba(0,0,0,1)]' : 'text-[10px] font-bold text-slate-100/90 drop-shadow-[0_1px_2px_rgba(0,0,0,1)]'}>
                                     {lbl.text}
                                 </div>
                             </div>
@@ -391,7 +455,7 @@
                 day: 'https://unpkg.com/three-globe/example/img/earth-day.jpg',
                 night: 'https://unpkg.com/three-globe/example/img/earth-night.jpg'
             };
-            const [currentMapTheme, setCurrentMapTheme] = useState(MAP_THEMES.dark);
+            const [currentMapTheme, setCurrentMapTheme] = useState(MAP_THEMES.night);
 
             useEffect(() => { setLogs(parseAdif(DEFAULT_ADIF)); }, []);
 
@@ -427,58 +491,58 @@
             });
 
             return (
-                <div className="h-screen w-full bg-slate-950 text-slate-100 flex p-4 font-sans gap-4 selection:bg-sky-500/30 overflow-hidden">
-                    <div className="w-[45%] flex flex-col gap-4 h-full">
-                        <div className="bg-slate-900/80 backdrop-blur-xl p-4 rounded-2xl border border-slate-800 flex-shrink-0 shadow-xl flex justify-between items-center">
-                            <div className="flex items-center gap-4">
-                                <div className="bg-gradient-to-br from-sky-400 to-blue-600 p-2.5 rounded-xl shadow-lg shadow-sky-500/20">
-                                    <Radio className="w-6 h-6 text-white" />
+                <div className="h-screen w-full bg-slate-950 text-slate-100 flex flex-col lg:flex-row p-2 lg:p-4 font-sans gap-2 lg:gap-4 selection:bg-sky-500/30 overflow-hidden">
+                    <div className="w-full lg:w-[45%] flex flex-col gap-3 lg:gap-4 h-[50vh] lg:h-full order-2 lg:order-1">
+                        <div className="bg-slate-900/80 backdrop-blur-xl p-3 lg:p-4 rounded-2xl border border-slate-800 flex-shrink-0 shadow-xl flex justify-between items-center">
+                            <div className="flex items-center gap-3 lg:gap-4">
+                                <div className="bg-gradient-to-br from-sky-400 to-blue-600 p-2 lg:p-2.5 rounded-xl shadow-lg shadow-sky-500/20">
+                                    <Radio className="w-5 h-5 lg:w-6 lg:h-6 text-white" />
                                 </div>
                                 <div>
-                                    <h1 className="text-xl font-black tracking-wide text-white drop-shadow-md">LW8EUA/A</h1>
-                                    <p className="text-sky-400 font-medium flex items-center gap-1 text-xs">
-                                        <MapPin className="w-3.5 h-3.5" /> GF05rj
+                                    <h1 className="text-lg lg:text-xl font-black tracking-wide text-white drop-shadow-md">LW8EUA/A</h1>
+                                    <p className="text-sky-400 font-medium flex items-center gap-1 text-[10px] lg:text-xs">
+                                        <MapPin className="w-3 h-3 lg:w-3.5 lg:h-3.5" /> GF05rj
                                     </p>
                                 </div>
                             </div>
-                            <label className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold px-3 py-2 rounded-lg cursor-pointer flex items-center gap-2">
-                                <Upload className="w-3.5 h-3.5 text-sky-400" /> Archivo .ADI
+                            <label className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[10px] lg:text-xs font-bold px-2 py-1.5 lg:px-3 lg:py-2 rounded-lg cursor-pointer flex items-center gap-1.5 lg:gap-2">
+                                <Upload className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-sky-400" /> Archivo .ADI
                                 <input type="file" accept=".adi,.adif,.txt" className="hidden" onChange={handleFileUpload} />
                             </label>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3 flex-shrink-0">
-                            <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 shadow-md">
-                                <div className="text-slate-400 text-[11px] mb-1 uppercase font-semibold">QSOs</div>
-                                <div className="text-xl font-bold text-white">{stats.totalQSOs}</div>
+                        <div className="grid grid-cols-3 gap-2 lg:gap-3 flex-shrink-0">
+                            <div className="bg-slate-900/60 p-2 lg:p-3 rounded-xl border border-slate-800/80 shadow-md">
+                                <div className="text-slate-400 text-[9px] lg:text-[11px] mb-0.5 lg:mb-1 uppercase font-semibold">QSOs</div>
+                                <div className="text-lg lg:text-xl font-bold text-white">{stats.totalQSOs}</div>
                             </div>
-                            <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 shadow-md">
-                                <div className="text-slate-400 text-[11px] mb-1 uppercase font-semibold">DXCC</div>
-                                <div className="text-xl font-bold text-sky-400">{stats.totalCountries}</div>
+                            <div className="bg-slate-900/60 p-2 lg:p-3 rounded-xl border border-slate-800/80 shadow-md">
+                                <div className="text-slate-400 text-[9px] lg:text-[11px] mb-0.5 lg:mb-1 uppercase font-semibold">DXCC</div>
+                                <div className="text-lg lg:text-xl font-bold text-sky-400">{stats.totalCountries}</div>
                             </div>
-                            <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 shadow-md">
-                                <div className="text-slate-400 text-[11px] mb-1 uppercase font-semibold">Dist. Max</div>
-                                <div className="text-xl font-bold text-emerald-400">{stats.maxDist}<span className="text-[10px] ml-1">KM</span></div>
+                            <div className="bg-slate-900/60 p-2 lg:p-3 rounded-xl border border-slate-800/80 shadow-md">
+                                <div className="text-slate-400 text-[9px] lg:text-[11px] mb-0.5 lg:mb-1 uppercase font-semibold">Dist. Max</div>
+                                <div className="text-lg lg:text-xl font-bold text-emerald-400">{stats.maxDist}<span className="text-[9px] lg:text-[10px] ml-1">KM</span></div>
                             </div>
                         </div>
 
                         <div className="flex-1 bg-slate-900/80 border border-slate-800 rounded-xl flex flex-col overflow-hidden">
-                            <div className="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-800/30">
-                                <h2 className="text-xs font-bold text-slate-200 uppercase flex items-center gap-2"><List className="w-4 h-4 text-sky-400" /> Logbook</h2>
-                                <input type="text" placeholder="Buscar señal o país..." className="bg-slate-950 border border-slate-700 text-xs px-3 py-1.5 rounded-md text-slate-300 outline-none w-48" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                            <div className="p-2 lg:p-3 border-b border-slate-800 flex flex-col lg:flex-row items-start lg:items-center justify-between bg-slate-800/30 gap-2">
+                                <h2 className="text-[10px] lg:text-xs font-bold text-slate-200 uppercase flex items-center gap-1.5 lg:gap-2"><List className="w-3 h-3 lg:w-4 lg:h-4 text-sky-400" /> Logbook</h2>
+                                <input type="text" placeholder="Buscar señal o país..." className="bg-slate-950 border border-slate-700 text-[10px] lg:text-xs px-2 py-1.5 lg:px-3 lg:py-1.5 rounded-md text-slate-300 outline-none w-full lg:w-48" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             </div>
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                <table className="w-full text-[11px] text-left">
+                                <table className="w-full text-[10px] lg:text-[11px] text-left">
                                     <thead className="text-slate-400 bg-slate-900/90 sticky top-0 z-10 backdrop-blur-md">
-                                        <tr><th className="px-4 py-2">Fecha/Hora</th><th className="px-4 py-2">Callsign</th><th className="px-4 py-2">Modo</th><th className="px-4 py-2 text-right">País</th></tr>
+                                        <tr><th className="px-2 lg:px-4 py-1.5 lg:py-2">Fecha/Hora</th><th className="px-2 lg:px-4 py-1.5 lg:py-2">Callsign</th><th className="px-2 lg:px-4 py-1.5 lg:py-2">Modo</th><th className="px-2 lg:px-4 py-1.5 lg:py-2 text-right">País</th></tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-800/50">
                                         {filteredLogs.map((log, i) => (
                                             <tr key={i} className="hover:bg-slate-800/60 transition-colors group">
-                                                <td className="px-4 py-2 text-slate-400">{log.F_DATE} {log.F_TIME}z</td>
-                                                <td className="px-4 py-2 font-bold text-sky-100">{log.CALL}</td>
-                                                <td className="px-4 py-2">{log.MODE} {log.BAND}</td>
-                                                <td className="px-4 py-2 text-right text-slate-300">{log.COUNTRY}</td>
+                                                <td className="px-2 lg:px-4 py-1.5 lg:py-2 text-slate-400 whitespace-nowrap">{log.F_DATE} {log.F_TIME}z</td>
+                                                <td className="px-2 lg:px-4 py-1.5 lg:py-2 font-bold text-sky-100">{log.CALL}</td>
+                                                <td className="px-2 lg:px-4 py-1.5 lg:py-2 whitespace-nowrap">{log.MODE} {log.BAND}</td>
+                                                <td className="px-2 lg:px-4 py-1.5 lg:py-2 text-right text-slate-300 truncate max-w-[80px] lg:max-w-none">{log.COUNTRY}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -487,11 +551,11 @@
                         </div>
                     </div>
 
-                    <div className="flex-1 h-full relative">
-                        <div className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-slate-900/80 backdrop-blur-md p-1.5 rounded-lg border border-slate-700 shadow-xl">
-                            <button onClick={() => setShowGeoLabels(!showGeoLabels)} className={`p-1.5 rounded-md ${showGeoLabels ? 'bg-sky-500/20 text-sky-400' : 'text-slate-400'}`}><MapIcon className="w-4 h-4" /></button>
-                            <div className="w-px h-4 bg-slate-700 mx-1"></div>
-                            <select className="bg-transparent text-xs text-slate-200 outline-none cursor-pointer" value={currentMapTheme} onChange={(e) => setCurrentMapTheme(e.target.value)}>
+                    <div className="w-full h-[45vh] lg:h-full lg:flex-1 relative order-1 lg:order-2 flex-shrink-0">
+                        <div className="absolute top-2 right-2 lg:top-4 lg:right-4 z-20 flex items-center gap-1.5 lg:gap-2 bg-slate-900/80 backdrop-blur-md p-1 lg:p-1.5 rounded-lg border border-slate-700 shadow-xl">
+                            <button onClick={() => setShowGeoLabels(!showGeoLabels)} className={`p-1 lg:p-1.5 rounded-md ${showGeoLabels ? 'bg-sky-500/20 text-sky-400' : 'text-slate-400'}`}><MapIcon className="w-3 h-3 lg:w-4 lg:h-4" /></button>
+                            <div className="w-px h-3 lg:h-4 bg-slate-700 mx-0.5 lg:mx-1"></div>
+                            <select className="bg-transparent text-[10px] lg:text-xs text-slate-200 outline-none cursor-pointer max-w-[80px] lg:max-w-none" value={currentMapTheme} onChange={(e) => setCurrentMapTheme(e.target.value)}>
                                 <option value={MAP_THEMES.dark} className="bg-slate-900">Oscuro</option>
                                 <option value={MAP_THEMES.blueMarble} className="bg-slate-900">Satélite</option>
                                 <option value={MAP_THEMES.day} className="bg-slate-900">Día</option>
