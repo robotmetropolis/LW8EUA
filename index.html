@@ -337,7 +337,7 @@
                 const animate = () => {
                     requestAnimationFrame(animate);
 
-                    if (!isDragging && (Date.now() - lastInteractionTime > 3000)) globeGroup.rotation.y -= 0.0005;
+                    //if (!isDragging && (Date.now() - lastInteractionTime > 3000)) globeGroup.rotation.y -= 0.0005;
 
                     radioPulses.forEach(p => {
                         p.progress += p.speed;
